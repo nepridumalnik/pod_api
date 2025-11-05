@@ -1,0 +1,96 @@
+openapi: 3.0.3
+info:
+  title: Pod API
+  version: 1.0.0
+  description: API for responding to text or text+image inputs
+servers:
+  - url: /
+paths:
+  /api/v1/respond/text:
+    post:
+      operationId: RespondText
+      summary: Respond to text input
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TextRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponse'
+  /api/v1/respond/text-image:
+    post:
+      operationId: RespondTextImage
+      summary: Respond to text and image input
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TextImageRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponse'
+components:
+  schemas:
+    TextRequest:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          description: Input text
+    TextImageRequest:
+      type: object
+      required:
+        - text
+        - image
+      properties:
+        text:
+          type: string
+          description: Input text
+        image:
+          type: string
+          format: binary
+          description: Image file
+    CommonResponse:
+      type: object
+      description: Common response wrapper
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResponseItem'
+    ResponseItem:
+      type: object
+      required:
+        - name
+        - description
+        - mainImageUrl
+        - carouselImageUrls
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        mainImageUrl:
+          type: string
+          format: uri
+        carouselImageUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+
