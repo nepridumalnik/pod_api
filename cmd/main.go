@@ -7,26 +7,31 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 
 	"pod_api/pkg/api"
-	"pod_api/pkg/apigen"
+	openapi "pod_api/pkg/apigen/openapi"
+	"pod_api/pkg/clients/gigachat"
 	"pod_api/pkg/config"
 )
 
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		log.Fatalf("config failed: %v", err)
 	}
 
-	e := echo.New()
-	e.HideBanner = true
-	e.Use(middleware.Recover())
-	e.Use(middleware.Logger())
+	server := echo.New()
+	server.HideBanner = true
+	server.Use(middleware.Recover())
+	server.Use(middleware.Logger())
 
-	// Register strict server
-	handlers := &api.Handlers{}
-	apigen.RegisterHandlers(e, apigen.NewStrictHandler(handlers, nil))
+	gigachatClient, err := gigachat.NewFromConfig(cfg)
+	if err != nil {
+		log.Fatalf("gigachat client init failed: %v", err)
+	}
 
-	if err := e.Start(cfg.Address); err != nil {
-		log.Fatalf("server: %v", err)
+	handlers := api.NewHandlers(gigachatClient, nil)
+	openapi.RegisterHandlers(server, openapi.NewStrictHandler(handlers, nil))
+
+	if err := server.Start(cfg.Address); err != nil {
+		log.Fatalf("server failed: %v", err)
 	}
 }
