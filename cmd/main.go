@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/labstack/echo/v4"
@@ -31,7 +32,7 @@ func main() {
 	handlers := api.NewHandlers(gigachatClient, nil)
 	openapi.RegisterHandlers(server, openapi.NewStrictHandler(handlers, nil))
 
-	if err := server.Start(cfg.Address); err != nil {
+	if err := server.Start(fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)); err != nil {
 		log.Fatalf("server failed: %v", err)
 	}
 }

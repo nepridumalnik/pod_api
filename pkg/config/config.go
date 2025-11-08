@@ -8,8 +8,11 @@ import (
 )
 
 type Config struct {
-	// HTTP listen address, e.g. ":8080"
-	Address string `env:"ADDRESS" envDefault:":8080"`
+	Server struct {
+		Port uint16 `env:"PORT" envDefault:"8080"`
+
+		Host string `env:"HOST" envDefault:"0.0.0.0"`
+	}
 
 	Gigachat struct {
 		// Base API URL for GigaChat, should point to API root (ends without trailing slash)
