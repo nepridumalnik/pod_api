@@ -14,6 +14,7 @@ import (
 
 	apigen "pod_api/pkg/apigen/gigachat"
 	"pod_api/pkg/config"
+	"pod_api/pkg/models"
 
 	"github.com/google/uuid"
 )
@@ -312,50 +313,132 @@ func (c *Client) Close() {
 }
 
 func makePromt(userMessage string) []apigen.Message {
-	sysRole := apigen.MessageRoleSystem
-	sysContent := systemPromt
+	// TODO: Implement proper prompts
 
-	assistantRole := apigen.MessageRoleAssistant
-	assistantContent := assistantPromt
+	// sysRole := apigen.MessageRoleSystem
+	// sysContent := systemPromt
 
-	functionRole := apigen.MessageRoleFunction
-	functionContent := functionPromt
+	// assistantRole := apigen.MessageRoleAssistant
+	// assistantContent := assistantPromt
+
+	// functionRole := apigen.MessageRoleFunction
+	// functionContent := functionPromt
 
 	userRole := apigen.MessageRoleUser
 	userContent := userMessage
 
 	return []apigen.Message{
-		{Role: &sysRole, Content: &sysContent},
+		// {Role: &sysRole, Content: &sysContent},
 		{Role: &userRole, Content: &userContent},
-		{Role: &assistantRole, Content: &assistantContent},
-		{Role: &functionRole, Content: &functionContent},
+		// {Role: &assistantRole, Content: &assistantContent},
+		// {Role: &functionRole, Content: &functionContent},
 	}
 }
 
 // SendMessage implements api.TextModel: sends a message to chat completions.
-func (c *Client) SendMessage(userMessage string) error {
+func (c *Client) SendMessage(userMessage string) (*models.ChatResponse, error) {
 	if userMessage == "" {
-		return errors.New("empty message")
+		return nil, errors.New("empty message")
 	}
 
-	msgs := makePromt(userMessage)
+	messages := makePromt(userMessage)
 
-	mt := c.maxTokens
-	req := apigen.Chat{
+	maxTokens := c.maxTokens
+	request := apigen.Chat{
 		Model:     c.model,
-		Messages:  msgs,
-		MaxTokens: &mt,
+		Messages:  messages,
+		MaxTokens: &maxTokens,
 	}
 
 	// Execute request with bearer editor (already attached globally).
-	rsp, err := c.apiClient.PostChatWithResponse(context.Background(), nil, req)
+	response, err := c.apiClient.PostChatWithResponse(context.Background(), nil, request)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Accept 200 (JSON or stream) as success. Any error JSON codes -> error.
-	if rsp.JSON200 == nil && (rsp.StatusCode() != 200) {
-		return errors.New("chat request failed: status " + rsp.Status())
+	if response.JSON200 == nil && (response.StatusCode() != 200) {
+		return nil, errors.New("chat request failed: status " + response.Status())
 	}
-	return nil
+
+	// Map GigaChat response to unified ChatResponse
+	if response.JSON200 == nil {
+		// No JSON body (maybe streaming or empty)
+		return &models.ChatResponse{}, nil
+	}
+
+	gc := response.JSON200
+	out := &models.ChatResponse{}
+	if gc.Created != nil {
+		out.Created = int64(*gc.Created)
+	}
+	if gc.Model != nil {
+		out.Model = *gc.Model
+	}
+	if gc.Object != nil {
+		out.Object = *gc.Object
+	}
+
+	// Map usage
+	if gc.Usage != nil {
+		u := &models.ChatUsage{}
+		if gc.Usage.PromptTokens != nil {
+			u.PromptTokens = *gc.Usage.PromptTokens
+		}
+		if gc.Usage.CompletionTokens != nil {
+			u.CompletionTokens = *gc.Usage.CompletionTokens
+		}
+		if gc.Usage.TotalTokens != nil {
+			u.TotalTokens = *gc.Usage.TotalTokens
+		}
+		if gc.Usage.PrecachedPromptTokens != nil {
+			u.PrecachedPromptTokens = *gc.Usage.PrecachedPromptTokens
+		}
+		out.Usage = u
+	}
+
+	// Map choices/messages
+	if gc.Choices != nil {
+		for _, ch := range *gc.Choices {
+			choice := models.ChatChoice{}
+			if ch.Index != nil {
+				choice.Index = *ch.Index
+			}
+			if ch.FinishReason != nil {
+				choice.FinishReason = string(*ch.FinishReason)
+			}
+			if ch.Message != nil {
+				m := models.ChatMessage{}
+				if ch.Message.Content != nil {
+					m.Content = *ch.Message.Content
+				}
+				if ch.Message.Role != nil {
+					m.Role = string(*ch.Message.Role)
+				}
+				if ch.Message.Name != nil {
+					m.Name = *ch.Message.Name
+				}
+				if ch.Message.Created != nil {
+					m.Created = int64(*ch.Message.Created)
+				}
+				if ch.Message.FunctionsStateId != nil {
+					m.FunctionsStateID = *ch.Message.FunctionsStateId
+				}
+				if ch.Message.FunctionCall != nil {
+					fc := &models.FunctionCall{}
+					if ch.Message.FunctionCall.Name != nil {
+						fc.Name = *ch.Message.FunctionCall.Name
+					}
+					if ch.Message.FunctionCall.Arguments != nil {
+						fc.Arguments = *ch.Message.FunctionCall.Arguments
+					}
+					m.FunctionCall = fc
+				}
+				choice.Message = m
+			}
+			out.Choices = append(out.Choices, choice)
+		}
+	}
+
+	return out, nil
 }

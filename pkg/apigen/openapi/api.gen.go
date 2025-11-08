@@ -20,6 +20,15 @@ type CommonResponse struct {
 	Items []ResponseItem `json:"items"`
 }
 
+// ErrorResponse Error wrapper
+type ErrorResponse struct {
+	// Details Optional error details
+	Details *map[string]interface{} `json:"details,omitempty"`
+
+	// Error Error message
+	Error string `json:"error"`
+}
+
 // ResponseItem defines model for ResponseItem.
 type ResponseItem struct {
 	CarouselImageUrls []string `json:"carouselImageUrls"`
@@ -132,6 +141,24 @@ func (response RespondText200JSONResponse) VisitRespondTextResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type RespondText400JSONResponse ErrorResponse
+
+func (response RespondText400JSONResponse) VisitRespondTextResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RespondText500JSONResponse ErrorResponse
+
+func (response RespondText500JSONResponse) VisitRespondTextResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type RespondTextImageRequestObject struct {
 	Body *multipart.Reader
 }
@@ -145,6 +172,24 @@ type RespondTextImage200JSONResponse CommonResponse
 func (response RespondTextImage200JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RespondTextImage400JSONResponse ErrorResponse
+
+func (response RespondTextImage400JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RespondTextImage500JSONResponse ErrorResponse
+
+func (response RespondTextImage500JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
 
 	return json.NewEncoder(w).Encode(response)
 }

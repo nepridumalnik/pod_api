@@ -29,7 +29,10 @@ func main() {
 		log.Fatalf("gigachat client init failed: %v", err)
 	}
 
-	handlers := api.NewHandlers(gigachatClient, nil)
+	handlers, err := api.NewHandlers(gigachatClient, nil)
+	if err != nil {
+		log.Fatalf("failed to create handlers: %v", err)
+	}
 	openapi.RegisterHandlers(server, openapi.NewStrictHandler(handlers, nil))
 
 	if err := server.Start(fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)); err != nil {
