@@ -14,6 +14,12 @@ type Config struct {
 		Host string `env:"HOST" envDefault:"0.0.0.0"`
 	}
 
+	OpenAI struct {
+		URL string `env:"OPENAI_URL" envDefault:"https://api.aitunnel.ru/v1"`
+
+		BasicKey string `env:"OPENAI_BASIC_KEY,required"`
+	}
+
 	Gigachat struct {
 		// Base API URL for GigaChat, should point to API root (ends without trailing slash)
 		URL string `env:"GIGACHAT_URL" envDefault:"https://gigachat.devices.sberbank.ru/api/v1"`
@@ -32,7 +38,7 @@ type Config struct {
 		TokenRefreshLeewaySeconds int `env:"GIGACHAT_TOKEN_REFRESH_LEEWAY_SECONDS" envDefault:"10"`
 
 		// Basic auth token (base64 of client_id:client_secret) used to obtain OAuth access token
-		BasicKey string `env:"GIGACHAT_BASIC_KEY"`
+		BasicKey string `env:"GIGACHAT_BASIC_KEY,required"`
 
 		// URL to a PEM-encoded Root CA certificate to trust for GigaChat API TLS
 		RootCAURL string `env:"GIGACHAT_ROOT_CA_URL" envDefault:"https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt"`
