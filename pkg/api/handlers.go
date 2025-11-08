@@ -49,8 +49,7 @@ func (h *Handlers) RespondText(ctx context.Context, request apigen.RespondTextRe
 	for i := range response.Choices {
 		if response.Choices[i].Message.Content != "" {
 			items = append(items, apigen.ResponseItem{
-				Name:        response.Choices[0].Message.Role,
-				Description: response.Choices[0].Message.Content,
+				Description: response.Choices[i].Message.Content,
 			})
 		}
 	}
