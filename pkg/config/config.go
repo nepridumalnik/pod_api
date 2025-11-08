@@ -18,6 +18,8 @@ type Config struct {
 		URL string `env:"OPENAI_URL" envDefault:"https://api.aitunnel.ru/v1"`
 
 		BasicKey string `env:"OPENAI_BASIC_KEY,required"`
+
+		Model string `env:"OPENAI_MODEL,required"`
 	}
 
 	Gigachat struct {

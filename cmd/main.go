@@ -30,7 +30,7 @@ func main() {
 		log.Fatalf("gigachat client init failed: %v", err)
 	}
 
-	openaiClient, err := openai.NewClient(config.OpenAI.BasicKey, config.OpenAI.URL)
+	openaiClient, err := openai.NewClient(config.OpenAI.BasicKey, config.OpenAI.URL, config.OpenAI.Model)
 	_ = openaiClient
 
 	if err != nil {

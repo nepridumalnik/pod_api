@@ -10,26 +10,45 @@ import (
 	"mime/multipart"
 	"net/http"
 
-	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/option"
 	"pod_api/pkg/models"
 	"pod_api/pkg/prompting"
+
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 )
 
 type Client struct {
 	client openai.Client
+	model  string
 }
 
-func NewClient(key string, url string) (*Client, error) {
+func isModelInList(model string, models []openai.Model) bool {
+	for i := range models {
+		if models[i].ID == model {
+			return true
+		}
+	}
+
+	return false
+}
+
+func NewClient(key string, url string, model string) (*Client, error) {
 	client := openai.NewClient(option.WithAPIKey(key), option.WithBaseURL(url))
 
-	// Smoke-test connectivity by listing models
-	_, err := client.Models.List(context.Background())
+	// Test connectivity by listing models
+	modelList, err := client.Models.List(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("connection test failed: %w", err)
 	}
 
-	return &Client{client: client}, nil
+	if !isModelInList(model, modelList.Data) {
+		return nil, fmt.Errorf("such model does not exists: %s", model)
+	}
+
+	return &Client{
+		client: client,
+		model:  model,
+	}, nil
 }
 
 // SendImage consumes a multipart form reader with fields:
@@ -96,7 +115,7 @@ func (c *Client) SendImage(usersMessage string, reader multipart.Reader) (*model
 	// Construct a chat.completions request with text + image content
 	// Use a vision-capable default model.
 	params := openai.ChatCompletionNewParams{
-		Model: openai.ChatModelGPT4oMini,
+		Model: openai.ChatModel(c.model),
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			{
 				OfSystem: &openai.ChatCompletionSystemMessageParam{
