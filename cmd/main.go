@@ -31,13 +31,12 @@ func main() {
 	}
 
 	openaiClient, err := openai.NewClient(config.OpenAI.BasicKey, config.OpenAI.URL, config.OpenAI.Model)
-	_ = openaiClient
 
 	if err != nil {
 		log.Fatalf("openai client init failed: %v", err)
 	}
 
-	handlers, err := api.NewHandlers(gigachatClient, nil)
+	handlers, err := api.NewHandlers(gigachatClient, openaiClient)
 	if err != nil {
 		log.Fatalf("failed to create handlers: %v", err)
 	}

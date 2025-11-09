@@ -7,12 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"mime/multipart"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
 	strictecho "github.com/oapi-codegen/runtime/strictmiddleware/echo"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // CommonResponse Common response wrapper
@@ -39,8 +37,8 @@ type ResponseItem struct {
 
 // TextImageRequest defines model for TextImageRequest.
 type TextImageRequest struct {
-	// Image Image file
-	Image openapi_types.File `json:"image"`
+	// Image URL to image
+	Image string `json:"image"`
 
 	// Text Input text
 	Text string `json:"text"`
@@ -52,34 +50,25 @@ type TextRequest struct {
 	Text string `json:"text"`
 }
 
+// RespondTextImageJSONRequestBody defines body for RespondTextImage for application/json ContentType.
+type RespondTextImageJSONRequestBody = TextImageRequest
+
 // RespondTextJSONRequestBody defines body for RespondText for application/json ContentType.
 type RespondTextJSONRequestBody = TextRequest
 
-// RespondTextImageMultipartRequestBody defines body for RespondTextImage for multipart/form-data ContentType.
-type RespondTextImageMultipartRequestBody = TextImageRequest
-
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Respond to text and image input
+	// (POST /api/v1/respond/image)
+	RespondTextImage(ctx echo.Context) error
 	// Respond to text input
 	// (POST /api/v1/respond/text)
 	RespondText(ctx echo.Context) error
-	// Respond to text and image input
-	// (POST /api/v1/respond/text-image)
-	RespondTextImage(ctx echo.Context) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler ServerInterface
-}
-
-// RespondText converts echo context to params.
-func (w *ServerInterfaceWrapper) RespondText(ctx echo.Context) error {
-	var err error
-
-	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.RespondText(ctx)
-	return err
 }
 
 // RespondTextImage converts echo context to params.
@@ -88,6 +77,15 @@ func (w *ServerInterfaceWrapper) RespondTextImage(ctx echo.Context) error {
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.RespondTextImage(ctx)
+	return err
+}
+
+// RespondText converts echo context to params.
+func (w *ServerInterfaceWrapper) RespondText(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.RespondText(ctx)
 	return err
 }
 
@@ -119,9 +117,44 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 		Handler: si,
 	}
 
+	router.POST(baseURL+"/api/v1/respond/image", wrapper.RespondTextImage)
 	router.POST(baseURL+"/api/v1/respond/text", wrapper.RespondText)
-	router.POST(baseURL+"/api/v1/respond/text-image", wrapper.RespondTextImage)
 
+}
+
+type RespondTextImageRequestObject struct {
+	Body *RespondTextImageJSONRequestBody
+}
+
+type RespondTextImageResponseObject interface {
+	VisitRespondTextImageResponse(w http.ResponseWriter) error
+}
+
+type RespondTextImage200JSONResponse CommonResponse
+
+func (response RespondTextImage200JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RespondTextImage400JSONResponse ErrorResponse
+
+func (response RespondTextImage400JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RespondTextImage500JSONResponse ErrorResponse
+
+func (response RespondTextImage500JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type RespondTextRequestObject struct {
@@ -159,49 +192,14 @@ func (response RespondText500JSONResponse) VisitRespondTextResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type RespondTextImageRequestObject struct {
-	Body *multipart.Reader
-}
-
-type RespondTextImageResponseObject interface {
-	VisitRespondTextImageResponse(w http.ResponseWriter) error
-}
-
-type RespondTextImage200JSONResponse CommonResponse
-
-func (response RespondTextImage200JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type RespondTextImage400JSONResponse ErrorResponse
-
-func (response RespondTextImage400JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type RespondTextImage500JSONResponse ErrorResponse
-
-func (response RespondTextImage500JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Respond to text and image input
+	// (POST /api/v1/respond/image)
+	RespondTextImage(ctx context.Context, request RespondTextImageRequestObject) (RespondTextImageResponseObject, error)
 	// Respond to text input
 	// (POST /api/v1/respond/text)
 	RespondText(ctx context.Context, request RespondTextRequestObject) (RespondTextResponseObject, error)
-	// Respond to text and image input
-	// (POST /api/v1/respond/text-image)
-	RespondTextImage(ctx context.Context, request RespondTextImageRequestObject) (RespondTextImageResponseObject, error)
 }
 
 type StrictHandlerFunc = strictecho.StrictEchoHandlerFunc
@@ -214,6 +212,35 @@ func NewStrictHandler(ssi StrictServerInterface, middlewares []StrictMiddlewareF
 type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
+}
+
+// RespondTextImage operation middleware
+func (sh *strictHandler) RespondTextImage(ctx echo.Context) error {
+	var request RespondTextImageRequestObject
+
+	var body RespondTextImageJSONRequestBody
+	if err := ctx.Bind(&body); err != nil {
+		return err
+	}
+	request.Body = &body
+
+	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.RespondTextImage(ctx.Request().Context(), request.(RespondTextImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RespondTextImage")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(RespondTextImageResponseObject); ok {
+		return validResponse.VisitRespondTextImageResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
 }
 
 // RespondText operation middleware
@@ -239,35 +266,6 @@ func (sh *strictHandler) RespondText(ctx echo.Context) error {
 		return err
 	} else if validResponse, ok := response.(RespondTextResponseObject); ok {
 		return validResponse.VisitRespondTextResponse(ctx.Response())
-	} else if response != nil {
-		return fmt.Errorf("unexpected response type: %T", response)
-	}
-	return nil
-}
-
-// RespondTextImage operation middleware
-func (sh *strictHandler) RespondTextImage(ctx echo.Context) error {
-	var request RespondTextImageRequestObject
-
-	if reader, err := ctx.Request().MultipartReader(); err != nil {
-		return err
-	} else {
-		request.Body = reader
-	}
-
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.RespondTextImage(ctx.Request().Context(), request.(RespondTextImageRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "RespondTextImage")
-	}
-
-	response, err := handler(ctx, request)
-
-	if err != nil {
-		return err
-	} else if validResponse, ok := response.(RespondTextImageResponseObject); ok {
-		return validResponse.VisitRespondTextImageResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}

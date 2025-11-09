@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"mime/multipart"
 
 	apigen "pod_api/pkg/apigen/openapi"
 	"pod_api/pkg/models"
@@ -12,25 +11,28 @@ import (
 type TextModel interface {
 	// SendMessage sends user text to the model and returns a unified
 	// chat response compatible with GigaChat/OpenAI along with an error.
-	SendMessage(usersMessage string) (*models.ChatResponse, error)
+	SendMessage(message string) (*models.ChatResponse, error)
 }
 
 type ImageModel interface {
-	SendImage(usersMessage string, reader multipart.Reader) error
+	SendImage(message string, url string) (*models.ChatResponse, error)
 }
 
 // Handlers implements apigen.StrictServerInterface.
 type Handlers struct {
-	text TextModel
-	img  ImageModel
+	text  TextModel
+	image ImageModel
 }
 
 // NewHandlers constructs Handlers with provided models.
-func NewHandlers(text TextModel, img ImageModel) (*Handlers, error) {
+func NewHandlers(text TextModel, image ImageModel) (*Handlers, error) {
 	if text == nil {
 		return nil, errors.New("text model should not be nil")
 	}
-	return &Handlers{text: text, img: img}, nil
+	if image == nil {
+		return nil, errors.New("image model should not be nil")
+	}
+	return &Handlers{text: text, image: image}, nil
 }
 
 // RespondText handles POST /api/v1/respond/text
@@ -59,5 +61,38 @@ func (h *Handlers) RespondText(ctx context.Context, request apigen.RespondTextRe
 
 // RespondTextImage handles POST /api/v1/respond/text-image
 func (h *Handlers) RespondTextImage(ctx context.Context, request apigen.RespondTextImageRequestObject) (apigen.RespondTextImageResponseObject, error) {
-	return apigen.RespondTextImage200JSONResponse{Items: []apigen.ResponseItem{}}, nil
+	if request.Body == nil {
+		return apigen.RespondTextImage400JSONResponse{Error: "bad_request"}, nil
+	}
+
+	response, err := h.image.SendImage(request.Body.Text, request.Body.Image)
+	if err != nil {
+		return nil, err
+	}
+
+	// Маппинг ChatResponse -> CommonResponse
+	var items []apigen.ResponseItem
+	for _, choice := range response.Choices {
+		message := choice.Message
+		if message.Content != "" {
+			items = append(items, apigen.ResponseItem{
+				Name:              response.Model,
+				Description:       message.Content,
+				MainImageUrl:      request.Body.Image,
+				CarouselImageUrls: []string{request.Body.Image},
+			})
+		}
+	}
+
+	// Если модель ничего не вернула - вернуть хотя бы пустой объект
+	if len(items) == 0 {
+		items = []apigen.ResponseItem{{
+			Name:              response.Model,
+			Description:       "(empty response)",
+			MainImageUrl:      request.Body.Image,
+			CarouselImageUrls: []string{request.Body.Image},
+		}}
+	}
+
+	return apigen.RespondTextImage200JSONResponse{Items: items}, nil
 }

@@ -35,14 +35,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /api/v1/respond/text-image:
+  /api/v1/respond/image:
     post:
       operationId: RespondTextImage
       summary: Respond to text and image input
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
               $ref: "#/components/schemas/TextImageRequest"
       responses:
@@ -98,8 +98,8 @@ components:
           description: Input text
         image:
           type: string
-          format: binary
-          description: Image file
+          format: url
+          description: URL to image
     CommonResponse:
       type: object
       description: Common response wrapper
