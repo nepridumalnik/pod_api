@@ -12,6 +12,7 @@ import (
 	"pod_api/pkg/clients/gigachat"
 	"pod_api/pkg/clients/openai"
 	"pod_api/pkg/config"
+	imagerepo "pod_api/pkg/repository/image"
 )
 
 func main() {
@@ -30,13 +31,25 @@ func main() {
 		log.Fatalf("gigachat client init failed: %v", err)
 	}
 
-	openaiClient, err := openai.NewClient(config.OpenAI.BasicKey, config.OpenAI.URL, config.OpenAI.Model)
+	openaiClient, err := openai.NewClient(
+		config.OpenAI.BasicKey,
+		config.OpenAI.URL,
+		config.OpenAI.Model,
+		config.OpenAI.RequestTimeout,
+	)
 
 	if err != nil {
 		log.Fatalf("openai client init failed: %v", err)
 	}
 
-	handlers, err := api.NewHandlers(gigachatClient, openaiClient)
+	imageRepository := imagerepo.NewMemoryRepository()
+	handlers, err := api.NewHandlers(
+		gigachatClient,
+		openaiClient,
+		imageRepository,
+		config.Server.BaseURL,
+		config.ImageTTL,
+	)
 	if err != nil {
 		log.Fatalf("failed to create handlers: %v", err)
 	}

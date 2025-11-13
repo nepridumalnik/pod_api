@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/caarlos0/env/v9"
 	"github.com/joho/godotenv"
@@ -12,6 +13,10 @@ type Config struct {
 		Port uint16 `env:"PORT" envDefault:"8080"`
 
 		Host string `env:"HOST" envDefault:"0.0.0.0"`
+
+		// BaseURL is used to construct absolute links in responses, e.g. https://host:port
+		// If empty, relative URLs will be returned.
+		BaseURL string `env:"BASE_URL" envDefault:""`
 	}
 
 	OpenAI struct {
@@ -20,6 +25,8 @@ type Config struct {
 		BasicKey string `env:"OPENAI_BASIC_KEY,required"`
 
 		Model string `env:"OPENAI_MODEL,required"`
+
+		RequestTimeout time.Duration `env:"OPENAI_REQUEST_TIMEOUT" envDefault:"30s"`
 	}
 
 	Gigachat struct {
@@ -48,6 +55,10 @@ type Config struct {
 		// Max tokens to request in chat completions
 		MaxTokens int `env:"GIGACHAT_MAX_TOKENS" envDefault:"1024"`
 	}
+
+	// ImageTTL controls how long uploaded/generated images are stored in memory.
+	// Example: "10m", "30s".
+	ImageTTL time.Duration `env:"IMAGE_TTL" envDefault:"30s"`
 }
 
 func isModelAllowed(model string) bool {

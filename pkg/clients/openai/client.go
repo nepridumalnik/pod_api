@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"pod_api/pkg/models"
 	"pod_api/pkg/prompting"
@@ -27,8 +28,10 @@ func isModelInList(model string, models []openai.Model) bool {
 	return false
 }
 
-func NewClient(key string, url string, model string) (*Client, error) {
-	client := openai.NewClient(option.WithAPIKey(key), option.WithBaseURL(url))
+func NewClient(key string, url string, model string, requestTimeout time.Duration) (*Client, error) {
+	client := openai.NewClient(option.WithAPIKey(key),
+		option.WithBaseURL(url),
+		option.WithRequestTimeout(requestTimeout))
 
 	// Test connectivity by listing models
 	modelList, err := client.Models.List(context.Background())

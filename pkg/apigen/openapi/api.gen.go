@@ -7,11 +7,24 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/oapi-codegen/runtime"
 	strictecho "github.com/oapi-codegen/runtime/strictmiddleware/echo"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// ChatImageRequest defines model for ChatImageRequest.
+type ChatImageRequest struct {
+	// Image Загруженное изображение (PNG/JPEG), содержащее текст
+	Image openapi_types.File `json:"image"`
+
+	// Text Промт пользователя
+	Text *string `json:"text,omitempty"`
+}
 
 // CommonResponse Common response wrapper
 type CommonResponse struct {
@@ -35,35 +48,35 @@ type ResponseItem struct {
 	Name              string   `json:"name"`
 }
 
-// TextImageRequest defines model for TextImageRequest.
-type TextImageRequest struct {
-	// Image URL to image
-	Image string `json:"image"`
-
-	// Text Input text
-	Text string `json:"text"`
-}
-
 // TextRequest defines model for TextRequest.
 type TextRequest struct {
 	// Text Input text
 	Text string `json:"text"`
 }
 
-// RespondTextImageJSONRequestBody defines body for RespondTextImage for application/json ContentType.
-type RespondTextImageJSONRequestBody = TextImageRequest
+// GetStaticImageParams defines parameters for GetStaticImage.
+type GetStaticImageParams struct {
+	// Callback URL для обратного вызова после скачивания
+	Callback *string `form:"callback,omitempty" json:"callback,omitempty"`
+}
+
+// ChatImageMultipartRequestBody defines body for ChatImage for multipart/form-data ContentType.
+type ChatImageMultipartRequestBody = ChatImageRequest
 
 // RespondTextJSONRequestBody defines body for RespondText for application/json ContentType.
 type RespondTextJSONRequestBody = TextRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// Respond to text and image input
-	// (POST /api/v1/respond/image)
-	RespondTextImage(ctx echo.Context) error
+	// Respond to an uploaded image containing text
+	// (POST /api/v1/chat/image)
+	ChatImage(ctx echo.Context) error
 	// Respond to text input
-	// (POST /api/v1/respond/text)
+	// (POST /api/v1/chat/text)
 	RespondText(ctx echo.Context) error
+	// Retrieve a generated or stored image
+	// (GET /api/v1/images/{id})
+	GetStaticImage(ctx echo.Context, id openapi_types.UUID, params GetStaticImageParams) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -71,12 +84,12 @@ type ServerInterfaceWrapper struct {
 	Handler ServerInterface
 }
 
-// RespondTextImage converts echo context to params.
-func (w *ServerInterfaceWrapper) RespondTextImage(ctx echo.Context) error {
+// ChatImage converts echo context to params.
+func (w *ServerInterfaceWrapper) ChatImage(ctx echo.Context) error {
 	var err error
 
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.RespondTextImage(ctx)
+	err = w.Handler.ChatImage(ctx)
 	return err
 }
 
@@ -86,6 +99,31 @@ func (w *ServerInterfaceWrapper) RespondText(ctx echo.Context) error {
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.RespondText(ctx)
+	return err
+}
+
+// GetStaticImage converts echo context to params.
+func (w *ServerInterfaceWrapper) GetStaticImage(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", ctx.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetStaticImageParams
+	// ------------- Optional query parameter "callback" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "callback", ctx.QueryParams(), &params.Callback)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter callback: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetStaticImage(ctx, id, params)
 	return err
 }
 
@@ -117,40 +155,41 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 		Handler: si,
 	}
 
-	router.POST(baseURL+"/api/v1/respond/image", wrapper.RespondTextImage)
-	router.POST(baseURL+"/api/v1/respond/text", wrapper.RespondText)
+	router.POST(baseURL+"/api/v1/chat/image", wrapper.ChatImage)
+	router.POST(baseURL+"/api/v1/chat/text", wrapper.RespondText)
+	router.GET(baseURL+"/api/v1/images/:id", wrapper.GetStaticImage)
 
 }
 
-type RespondTextImageRequestObject struct {
-	Body *RespondTextImageJSONRequestBody
+type ChatImageRequestObject struct {
+	Body *multipart.Reader
 }
 
-type RespondTextImageResponseObject interface {
-	VisitRespondTextImageResponse(w http.ResponseWriter) error
+type ChatImageResponseObject interface {
+	VisitChatImageResponse(w http.ResponseWriter) error
 }
 
-type RespondTextImage200JSONResponse CommonResponse
+type ChatImage200JSONResponse CommonResponse
 
-func (response RespondTextImage200JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
+func (response ChatImage200JSONResponse) VisitChatImageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type RespondTextImage400JSONResponse ErrorResponse
+type ChatImage400JSONResponse ErrorResponse
 
-func (response RespondTextImage400JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
+func (response ChatImage400JSONResponse) VisitChatImageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type RespondTextImage500JSONResponse ErrorResponse
+type ChatImage500JSONResponse ErrorResponse
 
-func (response RespondTextImage500JSONResponse) VisitRespondTextImageResponse(w http.ResponseWriter) error {
+func (response ChatImage500JSONResponse) VisitChatImageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -192,14 +231,82 @@ func (response RespondText500JSONResponse) VisitRespondTextResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetStaticImageRequestObject struct {
+	Id     openapi_types.UUID `json:"id"`
+	Params GetStaticImageParams
+}
+
+type GetStaticImageResponseObject interface {
+	VisitGetStaticImageResponse(w http.ResponseWriter) error
+}
+
+type GetStaticImage200ImagejpegResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetStaticImage200ImagejpegResponse) VisitGetStaticImageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "image/jpeg")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetStaticImage200ImagepngResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetStaticImage200ImagepngResponse) VisitGetStaticImageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "image/png")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetStaticImage404JSONResponse ErrorResponse
+
+func (response GetStaticImage404JSONResponse) VisitGetStaticImageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetStaticImage500JSONResponse ErrorResponse
+
+func (response GetStaticImage500JSONResponse) VisitGetStaticImageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// Respond to text and image input
-	// (POST /api/v1/respond/image)
-	RespondTextImage(ctx context.Context, request RespondTextImageRequestObject) (RespondTextImageResponseObject, error)
+	// Respond to an uploaded image containing text
+	// (POST /api/v1/chat/image)
+	ChatImage(ctx context.Context, request ChatImageRequestObject) (ChatImageResponseObject, error)
 	// Respond to text input
-	// (POST /api/v1/respond/text)
+	// (POST /api/v1/chat/text)
 	RespondText(ctx context.Context, request RespondTextRequestObject) (RespondTextResponseObject, error)
+	// Retrieve a generated or stored image
+	// (GET /api/v1/images/{id})
+	GetStaticImage(ctx context.Context, request GetStaticImageRequestObject) (GetStaticImageResponseObject, error)
 }
 
 type StrictHandlerFunc = strictecho.StrictEchoHandlerFunc
@@ -214,29 +321,29 @@ type strictHandler struct {
 	middlewares []StrictMiddlewareFunc
 }
 
-// RespondTextImage operation middleware
-func (sh *strictHandler) RespondTextImage(ctx echo.Context) error {
-	var request RespondTextImageRequestObject
+// ChatImage operation middleware
+func (sh *strictHandler) ChatImage(ctx echo.Context) error {
+	var request ChatImageRequestObject
 
-	var body RespondTextImageJSONRequestBody
-	if err := ctx.Bind(&body); err != nil {
+	if reader, err := ctx.Request().MultipartReader(); err != nil {
 		return err
+	} else {
+		request.Body = reader
 	}
-	request.Body = &body
 
 	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.RespondTextImage(ctx.Request().Context(), request.(RespondTextImageRequestObject))
+		return sh.ssi.ChatImage(ctx.Request().Context(), request.(ChatImageRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "RespondTextImage")
+		handler = middleware(handler, "ChatImage")
 	}
 
 	response, err := handler(ctx, request)
 
 	if err != nil {
 		return err
-	} else if validResponse, ok := response.(RespondTextImageResponseObject); ok {
-		return validResponse.VisitRespondTextImageResponse(ctx.Response())
+	} else if validResponse, ok := response.(ChatImageResponseObject); ok {
+		return validResponse.VisitChatImageResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}
@@ -266,6 +373,32 @@ func (sh *strictHandler) RespondText(ctx echo.Context) error {
 		return err
 	} else if validResponse, ok := response.(RespondTextResponseObject); ok {
 		return validResponse.VisitRespondTextResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// GetStaticImage operation middleware
+func (sh *strictHandler) GetStaticImage(ctx echo.Context, id openapi_types.UUID, params GetStaticImageParams) error {
+	var request GetStaticImageRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStaticImage(ctx.Request().Context(), request.(GetStaticImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStaticImage")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetStaticImageResponseObject); ok {
+		return validResponse.VisitGetStaticImageResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}
