@@ -14,7 +14,7 @@ import (
 	"pod_api/pkg/config"
 	"pod_api/pkg/logging"
 	"pod_api/pkg/metrics"
-	appmw "pod_api/pkg/middleware"
+	"pod_api/pkg/middleware"
 	imagerepo "pod_api/pkg/repository/image"
 )
 
@@ -33,7 +33,7 @@ func main() {
 	server := echo.New()
 	server.HideBanner = true
 	server.Use(echomw.Recover())
-	server.Use(appmw.RequestLogger(reg))
+	server.Use(middleware.RequestLogger(reg))
 
 	// Healthcheck and metrics
 	server.GET("/ping", func(c echo.Context) error { return c.String(200, "pong") })
