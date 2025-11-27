@@ -6,7 +6,7 @@ info:
 servers:
   - url: /
 paths:
-  /api/v1/respond/text:
+  /api/v1/chat/text:
     post:
       operationId: RespondText
       summary: Respond to text input
@@ -35,16 +35,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /api/v1/respond/image:
+  /api/v1/chat/image:
     post:
-      operationId: RespondTextImage
-      summary: Respond to text and image input
+      operationId: ChatImage
+      summary: Respond to an uploaded image containing text
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: "#/components/schemas/TextImageRequest"
+              $ref: "#/components/schemas/ChatImageRequest"
       responses:
         "200":
           description: OK
@@ -54,6 +54,50 @@ paths:
                 $ref: "#/components/schemas/CommonResponse"
         "400":
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/images/{id}:
+    get:
+      operationId: GetStaticImage
+      summary: Retrieve a generated or stored image
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Уникальный идентификатор картинки
+        - in: query
+          name: callback
+          required: false
+          schema:
+            type: string
+            format: uri
+          description: URL для обратного вызова после скачивания
+      responses:
+        "200":
+          description: OK
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Not Found
           content:
             application/json:
               schema:
@@ -87,19 +131,18 @@ components:
         text:
           type: string
           description: Input text
-    TextImageRequest:
+    ChatImageRequest:
       type: object
       required:
-        - text
         - image
       properties:
-        text:
-          type: string
-          description: Input text
         image:
           type: string
-          format: url
-          description: URL to image
+          format: binary
+          description: Загруженное изображение (PNG/JPEG), содержащее текст
+        text:
+          type: string
+          description: Промт пользователя
     CommonResponse:
       type: object
       description: Common response wrapper
