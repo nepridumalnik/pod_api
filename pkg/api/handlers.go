@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	apigen "pod_api/pkg/apigen/openapi"
 	"pod_api/pkg/models"
 	imagerepo "pod_api/pkg/repository/image"
@@ -248,7 +248,7 @@ func postCallback(url string, id string) {
 	payload := strings.NewReader(fmt.Sprintf(`{"id":"%s","status":"delivered"}`, id))
 	req, err := http.NewRequest(http.MethodPost, url, payload)
 	if err != nil {
-		log.Printf("callback build error: %v", err)
+		log.Error().Err(err).Msg("callback build error")
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -256,11 +256,11 @@ func postCallback(url string, id string) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("callback send error: %v", err)
+		log.Error().Err(err).Msg("callback send error")
 		return
 	}
 	_ = resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Printf("callback non-2xx status: %s", resp.Status)
+		log.Warn().Str("status", resp.Status).Msg("callback non-2xx status")
 	}
 }

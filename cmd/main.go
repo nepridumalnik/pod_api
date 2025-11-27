@@ -2,60 +2,76 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	echomw "github.com/labstack/echo/v4/middleware"
+	"github.com/rs/zerolog/log"
 
 	"pod_api/pkg/api"
 	openapi "pod_api/pkg/apigen/openapi"
 	"pod_api/pkg/clients/gigachat"
 	"pod_api/pkg/clients/openai"
 	"pod_api/pkg/config"
+	"pod_api/pkg/logging"
+	"pod_api/pkg/metrics"
+	appmw "pod_api/pkg/middleware"
 	imagerepo "pod_api/pkg/repository/image"
 )
 
 func main() {
-	config, err := config.Load()
+	// Setup logging
+	logging.Setup()
+
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config failed: %v", err)
+		log.Fatal().Err(err).Msg("config failed")
 	}
+
+	// Observability pieces
+	reg := metrics.NewRegistry()
 
 	server := echo.New()
 	server.HideBanner = true
-	server.Use(middleware.Recover())
-	server.Use(middleware.Logger())
+	server.Use(echomw.Recover())
+	server.Use(appmw.RequestLogger(reg))
 
-	gigachatClient, err := gigachat.NewFromConfig(config)
+	// Healthcheck and metrics
+	server.GET("/ping", func(c echo.Context) error { return c.String(200, "pong") })
+	server.GET("/metrics", reg.EchoHandlerText)
+	server.GET("/metrics.json", reg.EchoHandlerJSON)
+
+	gigachatClient, err := gigachat.NewFromConfig(cfg)
 	if err != nil {
-		log.Fatalf("gigachat client init failed: %v", err)
+		log.Fatal().Err(err).Msg("gigachat client init failed")
 	}
 
 	openaiClient, err := openai.NewClient(
-		config.OpenAI.BasicKey,
-		config.OpenAI.URL,
-		config.OpenAI.Model,
-		config.OpenAI.RequestTimeout,
+		cfg.OpenAI.BasicKey,
+		cfg.OpenAI.URL,
+		cfg.OpenAI.Model,
+		cfg.OpenAI.RequestTimeout,
 	)
 
 	if err != nil {
-		log.Fatalf("openai client init failed: %v", err)
+		log.Fatal().Err(err).Msg("openai client init failed")
 	}
 
-	imageRepository := imagerepo.NewMemoryRepository()
+	imageRepository := imagerepo.NewMemoryRepository(reg)
 	handlers, err := api.NewHandlers(
 		gigachatClient,
 		openaiClient,
 		imageRepository,
-		config.Server.BaseURL,
-		config.ImageTTL,
+		cfg.Server.BaseURL,
+		cfg.ImageTTL,
 	)
 	if err != nil {
-		log.Fatalf("failed to create handlers: %v", err)
+		log.Fatal().Err(err).Msg("failed to create handlers")
 	}
 	openapi.RegisterHandlers(server, openapi.NewStrictHandler(handlers, nil))
 
-	if err := server.Start(fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port)); err != nil {
-		log.Fatalf("server failed: %v", err)
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	log.Info().Str("addr", addr).Msg("starting server")
+	if err := server.Start(addr); err != nil {
+		log.Fatal().Err(err).Msg("server failed")
 	}
 }

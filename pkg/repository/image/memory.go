@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"pod_api/pkg/metrics"
 )
 
 type imageEntry struct {
@@ -18,11 +20,12 @@ type imageEntry struct {
 type MemoryRepository struct {
 	mu   sync.RWMutex
 	data map[string]*imageEntry
+	reg  *metrics.Registry
 }
 
 // NewMemoryRepository creates an empty in-memory repository.
-func NewMemoryRepository() *MemoryRepository {
-	return &MemoryRepository{data: make(map[string]*imageEntry)}
+func NewMemoryRepository(reg *metrics.Registry) *MemoryRepository {
+	return &MemoryRepository{data: make(map[string]*imageEntry), reg: reg}
 }
 
 // Save stores image bytes under a new UUID with TTL-based auto-deletion.
@@ -51,6 +54,13 @@ func (r *MemoryRepository) Save(ctx context.Context, b []byte, ttl time.Duration
 	r.data[id] = entry
 	r.mu.Unlock()
 
+	// Log and metrics
+	log.Ctx(ctx).Info().Str("image_id", id).Int("bytes", len(copyBuf)).Msg("image saved to memory")
+	if r.reg != nil {
+		r.reg.Inc(ctx, "images_saved_total", map[string]string{}, 1)
+		r.reg.Inc(ctx, "images_bytes_stored_total", map[string]string{}, int64(len(copyBuf)))
+	}
+
 	return id, nil
 }
 
@@ -78,6 +88,15 @@ func (r *MemoryRepository) Delete(ctx context.Context, id string) error {
 
 	if ok && e != nil && e.timer != nil {
 		e.timer.Stop()
+	}
+
+	if ok && e != nil {
+		size := len(e.data)
+		log.Ctx(ctx).Info().Str("image_id", id).Int("bytes", size).Msg("image memory freed")
+		if r.reg != nil {
+			r.reg.Inc(ctx, "images_deleted_total", map[string]string{}, 1)
+			r.reg.Inc(ctx, "images_bytes_deleted_total", map[string]string{}, int64(size))
+		}
 	}
 	return nil
 }
